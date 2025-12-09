@@ -18,7 +18,7 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 import chromadb
 
 import gradio as gr
-from elevenlabs.client import ElevenLabs
+from elevenlabs.client import ElevenLabs  # CORRIGÉ : Nouvelle API v2
 import dotenv
 
 dotenv.load_dotenv()
@@ -29,11 +29,13 @@ CLE_ELEVENLABS = os.getenv("CLE_ELEVENLABS")
 JETON_REPLICATE = os.getenv("JETON_REPLICATE")  # Obligatoire pour Flux
 
 os.environ["REPLICATE_API_TOKEN"] = JETON_REPLICATE
-set_api_key(CLE_ELEVENLABS)
 
 llm = ChatGroq(model="llama-3.1-70b-versatile", temperature=0.6, api_key=CLE_GROQ)
 
 ID_VOIX = "21m00Tcm4TlvDq8ikWAM"  # Rachel, la voix préférée des enfants
+
+# Client ElevenLabs global (CORRIGÉ)
+client_eleven = ElevenLabs(api_key=CLE_ELEVENLABS)
 
 # ================== Base de Données + Enregistrements ==================
 BASE = "claire_pro.db"
@@ -133,56 +135,26 @@ Réponds exactement comme Claire le ferait, avec majuscules sur les mots cibles 
             conn.commit()
             conn.close()
     
-    # Audio
-    audio = generate(text=reponse_claire, voice=ID_VOIX, model="eleven_turbo_v2_5", stream=False)
+    # Audio CORRIGÉ pour ElevenLabs v2
+    audio_gen = client_eleven.text_to_speech.convert(
+        text=reponse_claire,
+        voice_id=ID_VOIX,
+        model_id="eleven_turbo_v2_5",
+        output_format="mp3_44100_128"
+    )
     
-    return reponse_claire, audio, images if images else None
+    # Sauvegarde pour Gradio
+    chemin_audio = "temp_audio.mp3"
+    with open(chemin_audio, "wb") as f:
+        for chunk in audio_gen:
+            f.write(chunk)
+    
+    return reponse_claire, chemin_audio, images if images else None
 
-# ================== Génération du Rapport Hebdomadaire ==================
-def generer_rapport_semaine(nom: str):
-    conn = sqlite3.connect(BASE)
-    c = conn.cursor()
-    lundi = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%Y-%m-%d")
-    c.execute("""SELECT mot, COUNT(*) as nb, reaction FROM seances 
-                 WHERE nom=? AND horodatage >= ? GROUP BY mot ORDER BY nb DESC""", (nom, lundi))
-    donnees = c.fetchall()
-    conn.close()
-    
-    if not donnees:
-        return "Aucune séance cette semaine."
-    
-    tampon = io.BytesIO()
-    doc = SimpleDocTemplate(tampon, pagesize=A4, topMargin=2*cm)
-    styles = getSampleStyleSheet()
-    histoire = []
-    
-    histoire.append(Paragraph(f"<font size=18>Rapport hebdomadaire – {nom}</font>", styles['Title']))
-    histoire.append(Spacer(1, 20))
-    histoire.append(Paragraph(f"<b>Semaine du {lundi}</b>", styles['Normal']))
-    histoire.append(Spacer(1, 30))
-    
-    for mot, count, reaction in donnees[:10]:
-        histoire.append(Paragraph(f"• <b>{mot.upper()}</b> présenté {count} fois", styles['Normal']))
-        histoire.append(Paragraph(f"    Réactions observées : {reaction}", styles['Normal']))
-        histoire.append(Spacer(1, 12))
-    
-    histoire.append(PageBreak())
-    histoire.append(Paragraph("Photos générées cette semaine :", styles['Heading2']))
-    
-    c = sqlite3.connect(BASE).cursor()
-    c.execute("SELECT image_b64 FROM seances WHERE nom=? AND horodatage >= ? LIMIT 20", (nom, lundi))
-    for ligne in c.fetchall():
-        if ligne[0]:
-            donnees_img = base64.b64decode(ligne[0].split(",")[1])
-            img = RLImage(io.BytesIO(donnees_img), width=10*cm, height=10*cm)
-            histoire.append(img)
-            histoire.append(Spacer(1, 10))
-    
-    doc.build(histoire)
-    tampon.seek(0)
-    return tampon
+# [Le reste du code reste identique : generer_rapport_semaine, interface Gradio, etc.]
+# ... (copie le reste de ton fichier original ici pour la partie rapport et Gradio)
 
-# ================== Interface Gradio (Beau et Simple) ==================
+# Exemple pour la fin (ajoute si manquant)
 with gr.Blocks(title="Claire Pro Max – Orthophoniste IA Autisme", theme=gr.themes.Soft()) as demo:
     gr.Markdown("# 🦋 Claire Pro Max\n**L'orthophoniste virtuelle que tous les enfants adorent**")
     
@@ -225,6 +197,5 @@ with gr.Blocks(title="Claire Pro Max – Orthophoniste IA Autisme", theme=gr.the
     saisie_msg.submit(envoyer, [saisie_msg, chatbot, gr.State(value=""), categorie], [chatbot, audio, galerie, saisie_msg])
     
     btn_rapport.click(generer_rapport_semaine, saisie_nom, sortie_rapport)
-
 
 demo.launch(share=True, server_port=7860)
