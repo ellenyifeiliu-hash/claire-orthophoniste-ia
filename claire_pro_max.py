@@ -18,7 +18,7 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 import chromadb
 
 import gradio as gr
-from elevenlabs import generate, stream, set_api_key
+from elevenlabs.client import ElevenLabs
 import dotenv
 
 dotenv.load_dotenv()
@@ -225,5 +225,6 @@ with gr.Blocks(title="Claire Pro Max – Orthophoniste IA Autisme", theme=gr.the
     saisie_msg.submit(envoyer, [saisie_msg, chatbot, gr.State(value=""), categorie], [chatbot, audio, galerie, saisie_msg])
     
     btn_rapport.click(generer_rapport_semaine, saisie_nom, sortie_rapport)
+
 
 demo.launch(share=True, server_port=7860)
