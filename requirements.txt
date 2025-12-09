@@ -1,1 +1,12 @@
-langchain langchain-groq llama-index llama-index-vector-stores-chroma chromadb gradio elevenlabs python-dotenv reportlab svglib pillow replicate
+langchain
+langchain-groq
+llama-index
+llama-index-vector-stores-chroma
+chromadb
+gradio
+elevenlabs
+python-dotenv
+reportlab
+svglib
+pillow
+replicate
